@@ -1,0 +1,43 @@
+.main {
+    background: radial-gradient(circle at top left, #0d1b2a, #1b263b, #0d1b2a);
+    color: #e0e1dd;
+    font-family: 'Segoe UI', sans-serif;
+}
+
+.stTextInput > div > div > input {
+    background-color: #1b263b;
+    color: white;
+    border-radius: 8px;
+    border: 1px solid #415a77;
+}
+
+.result-card {
+    background: rgba(255, 255, 255, 0.08);
+    padding: 20px;
+    border-radius: 15px;
+    margin-top: 15px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.highlight {
+    color: #00b4d8;
+    font-weight: bold;
+}
+
+.chat-box {
+    background: rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 12px;
+    margin: 8px 0;
+}
+
+.assistant {
+    background-color: rgba(0,180,216,0.15);
+    border-left: 3px solid #00b4d8;
+}
+
+.user {
+    background-color: rgba(255,255,255,0.1);
+    border-right: 3px solid #adb5bd;
+}

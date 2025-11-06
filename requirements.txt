@@ -1,0 +1,13 @@
+# --- Core dependencies ---
+python-dotenv
+requests
+# --- LangChain ecosystem ---
+langchain
+langchain-community
+langchain-openai
+# --- Vector store ---
+faiss-cpu
+# --- Streamlit UI ---
+streamlit
+streamlit-extras
+streamlit-lottie

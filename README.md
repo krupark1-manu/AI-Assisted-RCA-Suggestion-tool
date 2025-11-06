@@ -73,11 +73,11 @@ graph TB
     INGEST -.->|Store Vectors| FAISS
     
     %% Notes
-    subgraph "📦 One-Time Setup"
+    subgraph "🔄 Periodic Update"
         INGEST
     end
     
-    subgraph "🔄 Real-Time Flow"
+    subgraph "⚡ Real-Time Query Flow"
         SUGGEST
         RETRIEVER
         LLM
@@ -91,12 +91,13 @@ graph TB
 
 ### 🔄 Flow Explanation
 
-**📦 One-Time Setup (Dotted Lines):**
-- Data Ingestion pulls historical bugs from ADO with "RCA Done" tag
+**🔄 Periodic Update (Dotted Lines):**
+- Data Ingestion is run manually on a periodic basis (daily/weekly)
+- Pulls latest historical bugs from ADO with "RCA Done" tag
 - Generates embeddings using LLM (OpenAI/OpenRouter)
-- Stores vector embeddings in FAISS index for fast similarity search
+- Updates FAISS index with new vector embeddings for improved accuracy
 
-**🔄 Real-Time Flow (Solid Lines):**
+**⚡ Real-Time Flow (Solid Lines):**
 1. **User Input**: User enters new Bug ID via Streamlit UI
 2. **Request Processing**: UI sends request to Suggestion Service
 3. **Bug Fetching**: Service retrieves bug details from Azure DevOps
@@ -190,9 +191,9 @@ OPENROUTER_API_KEY=your-api-key
 LLM_MODEL=gpt-4o-mini
 ```
 
-### 4️⃣ Ingest RCA-Done Bugs
+### 4️⃣  Ingest RCA-Done Bugs (Run Periodically)
 ```bash
-python backend/ingestion.py
+python -m backend.ingestion
 ```
 Builds a FAISS index with historical RCA-done bugs.
 
