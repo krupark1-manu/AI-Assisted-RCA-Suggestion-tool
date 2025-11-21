@@ -18,7 +18,8 @@ def build_retriever():
         embeddings,
         allow_dangerous_deserialization=True
     )
-
-    return db.as_retriever()   
+    
+    # ✅ Limit the number of documents retrieved
+    return db.as_retriever(search_type="similarity", search_kwargs={"k": 3})   
 
 

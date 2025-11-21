@@ -8,6 +8,7 @@ import os
 # Add project root to Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from backend.suggestion_service import suggest_rca
+from config.settings import ADO_PROJECT, ADO_ORG
 
 # -----------------------
 # 🎨 Page Configuration
@@ -44,8 +45,8 @@ load_css("assets/style.css")  # ✅ Load your external stylesheet
 # -----------------------
 # 🧭 Sidebar Navigation
 # -----------------------
-#st.sidebar.image("assets/logo.png", width=150)
-st.sidebar.title("🔧 RCA Assistant Menu")
+st.sidebar.image("assets/logo.png", width=150)
+st.sidebar.title("🔧 RCA Assistant")
 
 page = st.sidebar.radio(
     "Navigate",
@@ -59,11 +60,11 @@ st.sidebar.markdown("⚙️ *Powered by LangChain + OpenRouter*")
 # 🏠 HOME PAGE
 # -----------------------
 if page == "🏠 Home":
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        if bug_anim:
-            st_lottie(bug_anim, height=250, key="bug")
-    with col2:
+    # col1, col2 = st.columns([1, 2])
+    # with col1:
+    #     if bug_anim:
+    #         st_lottie(bug_anim, height=250, key="bug")
+    # with col2:
         st.markdown("## 🧠 Welcome to the AI RCA Assistant")
         st.markdown("""
         This intelligent assistant helps you **predict Root Cause Analysis (RCA)**  
@@ -94,17 +95,79 @@ elif page == "🧠 RCA Suggestion":
                 try:
                     time.sleep(1)
                     result = suggest_rca(int(bug_id))
+
                     st.markdown("### 💬 Chat View")
 
+                    # --- Chat UI Section ---
                     with st.container():
-                        st.markdown("<div class='chat-box user'><b>User:</b> Please suggest RCA for bug ID "
-                                    f"<span class='highlight'>{bug_id}</span>.</div>", unsafe_allow_html=True)
-                        st.markdown(f"<div class='chat-box assistant'><b>Assistant:</b> {result}</div>", unsafe_allow_html=True)
+                        st.markdown(
+                            f"<div class='chat-box user'><b>User:</b> Please suggest RCA for bug ID "
+                            f"<span class='highlight'>{bug_id}</span>.</div>",
+                            unsafe_allow_html=True
+                        )
+                        st.markdown(
+                            f"<div class='chat-box assistant'><b>Assistant:</b> {result['suggestion']}</div>",
+                            unsafe_allow_html=True
+                        )
 
+                    # --- RCA Suggestion Card ---
                     st.markdown("---")
-                    st.markdown(f"✅ **Suggested RCA:**\n\n<div class='result-card'>{result}</div>", unsafe_allow_html=True)
+                    st.markdown(
+                        f"✅ **Suggested RCA:**\n\n<div class='result-card'>{result['suggestion']}</div>",
+                        unsafe_allow_html=True
+                    )
+
+                     # === Reference Bugs Section ===
+                    st.markdown("## 🗂️ Reference Similar Bugs")
+
+                    if result["reference_message"]:
+                        # No similar bugs found
+                        st.info(result["reference_message"])
+                    else:
+                        # Show list of reference IDs + scores
+                        for ref in result["references"]:
+                            bug_id = ref["bug_id"]
+                            score = ref["score"]
+                            with st.container():
+                                st.markdown(f"""
+                            🔗 ADO Bug: [{bug_id}][View in ADO]({ADO_ORG}/{ADO_PROJECT}/_workitems/edit/{bug_id})
+                            Similarity Score: `{score:.3f}`
+                            ---
+                            """)
+                            # st.markdown(
+                            #     f="""
+                            #     <div class='ref-card'>
+                            #         🔗 <b>Bug Id:{bug_id}</b>
+                            #     </div>
+                            #     """,
+                            #     unsafe_allow_html=True
+                            # )
+
+                     # Reference Bugs
+                    # if result["references"]:
+                    #     st.markdown("### 🔗 Reference Similar Bugs")
+                    #     for ref in result["references"]:
+                    #         st.markdown(f"- 🧩 **Bug ID:** {ref}")
+                    # elif result["reference_message"]:
+                    #     st.info(result["reference_message"])
+                        
+                    # # --- 🧩 Reference Bugs Section ---
+                    # if result.get("references"):
+                    #     st.markdown("---")
+                    #     st.markdown("### 🧩 Reference RCA-Done Bugs")
+
+                    #     for doc in result["references"]:
+                    #         bug_meta = doc.metadata
+                    #         bug_id_ref = bug_meta.get("id", "Unknown ID")
+                    #         bug_title = doc.page_content.splitlines()[0][:120]  # short title
+                    #         st.markdown(
+                    #             f"- **Bug #{bug_id_ref}** — {bug_title} "
+                    #             f"[🔗 View in ADO]({ADO_ORG}/{ADO_PROJECT}/_workitems/edit/{bug_id_ref})"
+                    #         )
+
                 except Exception as e:
                     st.error(f"⚠️ Something went wrong: {str(e)}")
+
 
 # -----------------------
 # 📊 ABOUT PAGE
@@ -129,23 +192,3 @@ elif page == "📊 About App":
     """)
 
 
-
-
-
-
-
-
-
-
-# st.title("AI-Assisted RCA from ADO")
-
-
-# bug_id = st.text_input("Enter ADO Bug ID")
-
-# if st.button("Suggest RCA"):
-#     try:
-#         suggestion = suggest_rca(int(bug_id))
-#         st.write("### Suggested RCA/Fix")
-#         st.write(suggestion)
-#     except Exception as e:
-#         st.error(str(e))

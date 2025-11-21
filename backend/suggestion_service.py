@@ -15,9 +15,10 @@ def load_or_build_retriever():
 
     return build_retriever()
 
-def suggest_rca(bug_id):
+def suggest_rca(bug_id,threshold=1.0):
     """Given new bug description, suggest RCA based on past bugs."""
     retriever = load_or_build_retriever()
+    db = retriever.vectorstore  # get the underlying FAISS DB
 
      # 1️⃣ Fetch bug details
     bug = get_bug(bug_id)
@@ -25,13 +26,73 @@ def suggest_rca(bug_id):
     title = fields.get("System.Title", "")
     repro = fields.get("Microsoft.VSTS.TCM.ReproSteps", "")
     query = f"Title: {title}\nRepro: {repro}"
-    print(f"🔍 Querying RCA for bug {bug_id}: {query}")
+    # print(f"🔍 Querying RCA for bug {bug_id}: {query}")
+    print(f"🔍 Querying RCA for bug ID: {bug_id}")
 
-     # 3️⃣ Retrieve similar docs
-    similar_docs = retriever.invoke(query)
+    # 2️⃣ Get similar docs + similarity scores
+    docs_and_scores = db.similarity_search_with_score(query, k=3)
+    
+    # # 3️⃣ Retrieve similar docs
+    # similar_docs = retriever.invoke(query)
+    # 3️⃣ Filter based on similarity threshold
+    filtered_docs = []
+    for doc, score in docs_and_scores:
+        bug_id = doc.metadata.get("id") or doc.metadata.get("bug_id") or None
+
+        print(f"bug_id: {bug_id}, score: {score}")
+        # Save metadata + score
+        if score <= threshold:      # keep more similar matches
+            filtered_docs.append({
+                "doc": doc,
+                "score": score,
+                "bug_id": bug_id
+            })
+            print(f" after filter bug_id: {bug_id}, score: {score}")
+
+    print("ACTUAL FILTERED DOCS:", [item["bug_id"] for item in filtered_docs])
+    # if filtered_docs:
+    #     context = "\n\n".join([
+    #         f"Bug Title: {doc.metadata.get('title', '')}\n{doc.page_content}"
+    #         for doc in filtered_docs
+    #     ])
+    #     reference_ids = [doc.metadata.get("id", "Unknown") for doc in filtered_docs]
+    #     reference_message = None
+    # else:
+    #     context = "No similar bugs found in historical RCA data."
+    #     reference_ids = []
+    #     reference_message = "⚠️ No similar bugs found. RCA generated purely from LLM understanding."
+    # 3️⃣ Prepare context for LLM
+    if filtered_docs:
+        context = "\n\n".join([
+            f"Bug ID: {item['bug_id']} (Similarity Score: {item['score']})\n"
+            f"Bug Title: {item['doc'].metadata.get('title', '')}\n"
+            f"{item['doc'].page_content}"
+            for item in filtered_docs
+        ])
+
+        # reference_ids = [
+        #     f"{item['bug_id']} (Score: {item['score']})"
+        #     for item in filtered_docs
+        # ]
+        reference_ids = [
+            {
+                "bug_id": item["bug_id"],
+                "score": float(item["score"])   # convert numpy.float32 → Python float
+            }
+            for item in filtered_docs
+        ]
+
+        reference_message = None
+
+    else:
+        context = "No similar bugs found in historical RCA data."
+        reference_ids = []
+        reference_message = "⚠️ No similar bugs found. RCA generated purely from LLM understanding."
+
 
     # 4️⃣ Combine retrieved RCAs into context
-    context = "\n\n".join([doc.page_content for doc in similar_docs])
+    #context = "\n\n".join([doc.page_content for doc in filtered_docs])
+    #context = "\n\n".join([f"Bug Title: {doc.metadata.get('title', '')}\n{doc.page_content}" for doc in filtered_docs])
 
      # ✅ Initialize LLM (OpenRouter)
     llm = ChatOpenAI(
@@ -69,8 +130,12 @@ def suggest_rca(bug_id):
 
      # ✅ Run the chain
     response = chain.invoke({"query": query, "context": context})
-    print(f"💡 Suggested RCA: {response}")
+    #print(f"💡 Suggested RCA: {response}")
 
-    # ✅ Return LLM’s text output
-    return response.content if hasattr(response, "content") else str(response)
+    # ✅ Return both LLM output and reference documents
+    return {
+        "suggestion": response.content if hasattr(response, "content") else str(response),
+        "references": reference_ids,
+        "reference_message": reference_message  # send docs back for UI display
+    }
     

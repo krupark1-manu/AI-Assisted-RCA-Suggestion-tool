@@ -1,4 +1,5 @@
 import os
+import numpy as np
 import json
 import base64
 import requests
@@ -7,7 +8,7 @@ from langchain_core.documents import Document
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
 from backend.ado_client  import get_bug
-from config.settings import ADO_ORG, ADO_PROJECT, ADO_PAT, OPENROUTER_API_KEY,EMBEDDING_MODEL
+from config.settings import ADO_ORG, ADO_PROJECT, ADO_PAT, OPENROUTER_API_KEY,EMBEDDING_MODEL,INDEX_PATH
 
 # --- ADO Helpers ---
 
@@ -18,6 +19,12 @@ AUTH_TOKEN = base64.b64encode(f":{ADO_PAT}".encode()).decode()
 HEADERS = {"Authorization": f"Basic {AUTH_TOKEN}"}
 
 INGESTED_FILE = "data/ingested_ids.json"
+
+# --------- Manual L2 Normalization ----------
+def normalize(vec):
+    vec = np.array(vec)
+    norm = np.linalg.norm(vec)
+    return vec / norm if norm != 0 else vec
 
 if not os.path.exists(INGESTED_FILE):
     os.makedirs("data", exist_ok=True)
@@ -55,13 +62,6 @@ def query_rca_done_bugs():
     work_items = r.json().get("workItems", [])
     return [wi["id"] for wi in work_items]
 
-# def get_bug_details(bug_id):
-#     """Fetch full bug details by ID."""
-#     url = f"{BASE_URL}/wit/workitems/{bug_id}?api-version=7.0"
-#     r = requests.get(url, headers=HEADERS)
-#     r.raise_for_status()
-#     return r.json()
-
 # --- Ingestion & Index Building ---
 
 def ingest_new_bugs():
@@ -85,7 +85,7 @@ def ingest_new_bugs():
          rca = fields.get("Custom.RCADetail", "")  # Adjust if RCA field is custom
          print(f"RCA details for {bug_id}: {rca}")
          text = f"Title: {title}\nRepro: {repro}\nRCA: {rca}"
-         docs.append(Document(page_content=text, metadata={"id": bug_id}))
+         docs.append(Document(page_content=text, metadata={"id": bug_id, "title": title}))
     
         # --- OpenRouter Embeddings ---
     embeddings = OpenAIEmbeddings(
@@ -94,20 +94,38 @@ def ingest_new_bugs():
         model=EMBEDDING_MODEL,
         http_client=httpx.Client(verify=False)
     )
+    texts = [d.page_content for d in docs]
+    metadatas = [d.metadata for d in docs]
+
+    raw_vectors = embeddings.embed_documents(texts)
+    normalized_vectors = [normalize(v) for v in raw_vectors]   # ⭐ Manual L2 normalization
 
     # # # Load existing FAISS index (if exists) or Build FAISS index
-    if os.path.exists("data/faiss_index"):
-         db = FAISS.load_local("data/faiss_index", embeddings, allow_dangerous_deserialization=True)
+    if os.path.exists(INDEX_PATH):
+         db = FAISS.load_local(INDEX_PATH, embeddings, allow_dangerous_deserialization=True)
          db.add_documents(docs)
+        #  db.add_embeddings(
+        #     embeddings=normalized_vectors,
+        #     texts=texts,
+        #     metadatas=metadatas
+        # )
          print("✅ Updated existing FAISS index with new bugs.")
     else:
          print("✅ Building python -m backend.ingestion new FAISS index.")
          db = FAISS.from_documents(docs, embeddings)
+         # Build new index correctly: need list of (text, vector) pairs
+         #text_embedding_pairs = list(zip(texts, normalized_vectors))
+        #  text_embedding_pairs = [(texts[i], normalized_vectors[i]) for i in range(len(texts))]
+        #  db = FAISS.from_embeddings(
+        #     text_embeddings=text_embedding_pairs,
+        #     embedding=embeddings,
+        #     metadatas=metadatas
+        #)
          print("✅ Built new FAISS index.")
 
     # # Save index to disk
-    os.makedirs("data/faiss_index", exist_ok=True)
-    db.save_local("data/faiss_index")
+    os.makedirs(os.path.dirname(INDEX_PATH), exist_ok=True)
+    db.save_local(INDEX_PATH)
 
     print(f"Ingested {len(docs)} bugs into FAISS index.")
     save_ingested_ids(existing_ids.union(set(new_ids)))
